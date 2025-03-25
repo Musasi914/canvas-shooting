@@ -1,5 +1,5 @@
-import { Enemy, Shot, Viper } from "./character";
-import { BackgroundStar, Canvas2dUtility, Explosion } from "./class";
+import { Boss, Enemy, Homing, Shot, Viper } from "./character";
+import { BackgroundStar, Canvas2dUtility, Explosion, Sound } from "./class";
 import { Scene } from "./scene";
 import "./style.css";
 
@@ -40,6 +40,16 @@ const STAR_SPEED = 6;
 const STAR_SIZE = 3;
 let backgroundStars: BackgroundStar[] = [];
 
+// 音
+let sound: Sound;
+const SOUND_PATH = "/sound/explosion.mp3";
+
+// ボス
+let boss: Boss;
+
+const HOMING_MAX_COUNT = 20;
+let homingShots: Homing[] = [];
+
 //---------------------------main---------------------------//
 const main_canvas: HTMLCanvasElement | null = document.querySelector("#main_canvas");
 if (!main_canvas) throw new Error("canvasがnullです");
@@ -47,14 +57,24 @@ const util = new Canvas2dUtility(main_canvas);
 const canvas = util.canvas;
 const ctx = util.context;
 
-initialize();
-loadCheck(render);
+const btn: HTMLButtonElement | null = document.querySelector("#btn_start");
+// const btn_nosound = document.querySelector("btn_start_sound");
+
+btn?.addEventListener("click", () => {
+  btn.disabled = true;
+  initialize();
+  loadCheck(render);
+});
 
 //---------------------------initialize & render---------------------------//
 function initialize() {
   keyEventSetting();
   canvas.width = CANVAS_WIDTH;
   canvas.height = CANVAS_HEIGHT;
+
+  // 音
+  sound = new Sound();
+  sound.load(SOUND_PATH);
 
   // 自機
   viper = new Viper(ctx, 0, 0, 64, 64, "/images/viper.png");
@@ -86,12 +106,25 @@ function initialize() {
     largeEnemyArray[i].setTarget([viper]);
   }
 
+  // ボス
+  boss = new Boss(ctx, 0, 0, 128, 128, "/images/boss.png");
+  boss.setShotsArray(homingShots);
+  boss.setTarget([viper]);
+  for (const i of sequence(0, HOMING_MAX_COUNT)) {
+    homingShots[i] = new Homing(ctx, 0, 0, 32, 32, "/images/homing_shot.png");
+    homingShots[i].setTarget([viper]);
+    homingShots[i].setExplosion(explosion);
+  }
+
   // 爆発
   for (const i of sequence(0, EXPLOSION_MAX_COUNT)) {
     explosion[i] = new Explosion(ctx, 80, 50, 20, 0.5, "#ff1166");
+    explosion[i].setSound(sound);
   }
 
-  let concatEnemyArray = enemyArray.concat(largeEnemyArray);
+  let concatEnemyArray: (Enemy | Boss)[] = enemyArray.concat(largeEnemyArray);
+  concatEnemyArray = concatEnemyArray.concat([boss]);
+
   // 衝突判定
   for (const i of sequence(0, VIPER_SHOT_MAX_COUNT)) {
     viper.setTarget(concatEnemyArray);
@@ -114,7 +147,7 @@ function initialize() {
 
 function render() {
   if (isPaused) {
-    setTimeout(render, 1000);
+    setTimeout(render, 100);
     return;
   }
   util.drawRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT, "#000022");
@@ -129,9 +162,11 @@ function render() {
   viper.update();
   viperShots.forEach((shot) => shot.update());
   enemyArray.forEach((enemy) => enemy.update());
+  boss.update();
   largeEnemyArray.forEach((enemy) => enemy.update());
   enemyShots.forEach((shot) => shot.update());
   explosion.forEach((explosion) => explosion.update());
+  homingShots.forEach((shot) => shot.update());
 
   setTimeout(render, 20);
   // requestAnimationFrame(render);
@@ -144,7 +179,10 @@ function loadCheck(callback: () => void) {
     viperShots.every((shot) => shot.ready === true) &&
     enemyArray.every((enemy) => enemy.ready === true) &&
     enemyShots.every((shot) => shot.ready === true) &&
-    largeEnemyArray.every((enemy) => enemy.ready === true)
+    largeEnemyArray.every((enemy) => enemy.ready === true) &&
+    sound.ready &&
+    boss.ready &&
+    homingShots.every((shot) => shot.ready)
   ) {
     callback();
   } else {
@@ -179,7 +217,7 @@ export function sequence(start: number, end: number): number[] {
 function sceneInitialize() {
   scene.add("isComing", (frame) => {
     if (frame > 50) {
-      scene.activate("invade_large");
+      scene.activate("boss");
     }
   });
 
@@ -222,7 +260,17 @@ function sceneInitialize() {
         }
       }
     }
-    if (frame === 500) {
+    if (frame > 500) {
+      scene.activate("invade");
+    }
+  });
+
+  scene.add("boss", (frame) => {
+    if (boss.life <= 0) {
+      boss.set(CANVAS_WIDTH / 2, -boss.height);
+    }
+
+    if (frame > 500) {
       scene.activate("invade");
     }
   });

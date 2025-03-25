@@ -1,4 +1,4 @@
-import { Character, Explosion, Position } from "./class";
+import { Character, Explosion, Position, Sound } from "./class";
 import { isKeydown, sequence } from "./main";
 
 export class Viper extends Character {
@@ -60,6 +60,7 @@ export class Viper extends Character {
           for (const i of sequence(0, this.explosion.length)) {
             if (this.explosion[i].life <= 0) {
               this.explosion[i].set(this.position.x, this.position.y);
+              this.explosion[i].sound?.play();
               break;
             }
           }
@@ -110,9 +111,9 @@ export class Viper extends Character {
 }
 
 export class Shot extends Character {
-  private speed: number;
-  private power: number;
-  private explosion: Explosion[];
+  protected speed: number;
+  protected power: number;
+  protected explosion: Explosion[];
 
   constructor(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, imagePath: string) {
     super(ctx, x, y, w, h, 0, imagePath);
@@ -155,6 +156,7 @@ export class Shot extends Character {
           for (const i of sequence(0, this.explosion.length)) {
             if (this.explosion[i].life <= 0) {
               this.explosion[i].set(target.position.x, target.position.y);
+              this.explosion[i].sound?.play();
               break;
             }
           }
@@ -271,5 +273,141 @@ export class Enemy extends Character {
         break;
       }
     }
+  }
+}
+
+export class Boss extends Character {
+  speed: number;
+  frame: number;
+  homingShots: Shot[];
+
+  constructor(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, imagePath: string) {
+    super(ctx, x, y, w, h, 0, imagePath);
+    this.speed = 3;
+    this.frame = -1;
+    this.homingShots = [];
+  }
+
+  set(x: number, y: number) {
+    this.position.set(x, y);
+    this.life = 80;
+    this.frame = 0;
+  }
+
+  setShotsArray(shots: Shot[]) {
+    this.homingShots = shots;
+  }
+
+  homingfire(x: number, y: number, speed: number = 5) {
+    for (const shot of this.homingShots) {
+      if (shot.life <= 0) {
+        shot.setVector(x, y);
+        shot.setShot(this.position.x, this.position.y, 1);
+        shot.setSpeed(speed);
+        break;
+      }
+    }
+  }
+
+  update() {
+    if (this.life <= 0) return;
+    this.ctx.globalAlpha = 1;
+
+    this.position.x += Math.cos(this.frame / 80) * 2;
+    if (this.position.y <= 100) {
+      this.position.y += this.speed;
+    }
+
+    if (this.frame % 50 === 0) {
+      let normalized = this.normalize(this.target[0]);
+      this.homingfire(normalized.x, normalized.y);
+    }
+
+    // 敵消す
+    if (
+      this.position.x < 0 - this.width ||
+      this.position.x > this.ctx.canvas.width + this.width ||
+      this.position.y < 0 - this.height ||
+      this.position.y > this.ctx.canvas.height + this.height
+    ) {
+      this.life = 0;
+      this.frame = -1;
+    }
+    this.draw();
+    this.frame++;
+  }
+}
+
+export class Homing extends Shot {
+  frame: number;
+
+  constructor(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, imagePath: string) {
+    super(ctx, x, y, w, h, imagePath);
+    this.frame = 0;
+  }
+
+  update() {
+    if (this.life <= 0) return;
+
+    // this.vectorには単位化したヴェクトルが入る
+    // 弾の行き先をきめる
+    /** 自分とタゲの位置ベクトル */
+    let normalized = this.normalize(this.target[0]);
+
+    /** 自分の進行単位ベクトル */
+    this.vector = this.vector.normalize(this.vector);
+
+    /** 外積 */
+    let cross = this.vector.cross(normalized);
+
+    if (cross > 0) {
+      this.vector.rotate(Math.PI / 180);
+    } else if (cross < 0) {
+      this.vector.rotate(-Math.PI / 180);
+    }
+
+    let radian = Math.atan2(this.vector.y, this.vector.x);
+
+    this.angle = radian;
+
+    this.position.x += this.vector.x * this.speed;
+    this.position.y += this.vector.y * this.speed;
+
+    // 衝突判定
+    for (const target of this.target) {
+      if (target.life <= 0) continue;
+      let distance = this.calcDistance(target);
+      if (distance < (this.width + target.width) / 4) {
+        // iscomingならreturn
+        if (target instanceof Viper && target.isComing) {
+          break;
+        }
+
+        target.life -= this.power;
+        if (target.life <= 0) {
+          for (const i of sequence(0, this.explosion.length)) {
+            if (this.explosion[i].life <= 0) {
+              this.explosion[i].set(target.position.x, target.position.y);
+              this.explosion[i].sound?.play();
+              break;
+            }
+          }
+        }
+        this.life = 0;
+      }
+    }
+
+    // ショット消す
+    if (
+      this.position.x < 0 - this.width ||
+      this.position.x > this.ctx.canvas.width + this.width ||
+      this.position.y < 0 - this.height ||
+      this.position.y > this.ctx.canvas.height + this.height
+    ) {
+      this.life = 0;
+    }
+
+    this.rotationDraw();
+    this.frame++;
   }
 }

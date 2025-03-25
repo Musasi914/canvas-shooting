@@ -5,10 +5,17 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TSでグラフィックス</title>
+    <script type="module" src="/src/main.ts"></script>
   </head>
   <body>
     <h1>hello</h1>
-    <canvas id="main_canvas"></canvas>
-    <script type="module" src="/src/main.ts"></script>
+    <canvas id="main_canvas" width="600" height="480"></canvas>
+    <div>
+      <button id="btn_start">START（効果音あり）</button>
+    </div>
+    <p>矢印 - 移動</p>
+    <p>z - 弾</p>
+    <p>q - 一時停止</p>
+    <p>enter - やり直し</p>
   </body>
 </html>

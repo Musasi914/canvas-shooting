@@ -36,7 +36,30 @@ export class Position {
     this.y = y;
   }
 
-  static initialize(x: number, y: number) {
+  normalize(position: Position) {
+    let scaler = Math.sqrt(position.x ** 2 + position.y ** 2);
+    return new Position(position.x / scaler, position.y / scaler);
+  }
+
+  /** 内積 */
+  dot(normalize: Position) {
+    return this.x * normalize.x + this.x * normalize.y;
+  }
+
+  /** 外積 */
+  cross(normalize: Position) {
+    return this.x * normalize.y - this.y * normalize.x;
+  }
+
+  /** 回転 */
+  rotate(radian: number) {
+    let cos = Math.cos(radian);
+    let sin = Math.sin(radian);
+    this.x = cos * this.x + -sin * this.y;
+    this.y = sin * this.x + cos * this.y;
+  }
+
+  static normalize(x: number, y: number) {
     let scaler = Math.sqrt(x ** 2 + y ** 2);
     return new Position(x / scaler, y / scaler);
   }
@@ -55,7 +78,7 @@ export class Character {
   private image: HTMLImageElement;
   public ready: boolean;
   public vector: Position;
-  private angle: number;
+  public angle: number;
   public target: Character[];
 
   constructor(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, life: number, imagePath: string) {
@@ -122,17 +145,18 @@ export class Character {
 }
 
 export class Explosion {
-  ctx: CanvasRenderingContext2D;
-  range: number; // 範囲（半径）
-  size: number;
-  count: number;
-  color: string;
-  life: number;
-  position: Position[];
-  timeRange: number; // 終わるまでの時間（秒）
-  startTime: number | undefined;
-  vector: Position[];
-  fireSizes: number[];
+  private ctx: CanvasRenderingContext2D;
+  private range: number; // 範囲（半径）
+  private size: number;
+  private count: number;
+  private color: string;
+  public life: number;
+  private position: Position[];
+  private timeRange: number; // 終わるまでの時間（秒）
+  private startTime: number | undefined;
+  private vector: Position[];
+  private fireSizes: number[];
+  public sound: Sound | undefined;
 
   constructor(ctx: CanvasRenderingContext2D, range: number, size: number, count: number, timeRange: number, color: string) {
     this.ctx = ctx;
@@ -146,6 +170,10 @@ export class Explosion {
     this.position = [];
     this.vector = [];
     this.fireSizes = [];
+  }
+
+  setSound(sound: Sound) {
+    this.sound = sound;
   }
 
   set(x: number, y: number) {
@@ -233,5 +261,46 @@ export class BackgroundStar {
       this.position.y = -this.size;
     }
     this.ctx.fillRect(this.position.x, this.position.y, this.size, this.size);
+  }
+}
+
+export class Sound {
+  ctx: AudioContext;
+  audioBuffer: AudioBuffer | undefined;
+  ready: boolean;
+  gainNode: GainNode;
+
+  constructor() {
+    this.ctx = new AudioContext();
+    this.ready = false;
+    this.gainNode = this.ctx.createGain(); // GainNodeを作成
+    this.gainNode.gain.value = 0.1; // 初期音量を50%に設定
+    this.gainNode.connect(this.ctx.destination); // AudioContextの出力に接続
+  }
+
+  load(path: string) {
+    fetch(path)
+      .then((res) => res.arrayBuffer())
+      .then((arrayBuffer) => this.ctx.decodeAudioData(arrayBuffer))
+      .then((audioBuffer) => {
+        this.audioBuffer = audioBuffer;
+        this.ready = true;
+      })
+      .catch(() => console.log("サウンドがロードできない"));
+  }
+
+  play() {
+    let node: AudioBufferSourceNode | null = this.ctx.createBufferSource();
+    if (!node || !this.audioBuffer) return;
+
+    node.buffer = this.audioBuffer;
+    node.connect(this.gainNode);
+    node.start();
+    node.addEventListener("ended", () => {
+      // if (node) {
+      node.disconnect();
+      // }
+      // node = null;
+    });
   }
 }
